@@ -1,0 +1,115 @@
+# TCP-stack TEST CONFIGURATION
+
+global:
+    # result of each test will be in separate file in this folder
+    test_result_dir: /tmp/vppqa
+    # IP address used in tests:
+    # Configured on VPP loopback interface
+    # Used as binding for iperf3 server listener
+    host: 192.168.5.5
+vpp:
+    # can be overriden by --no-vpp argument
+    enable: True
+    # VPP binary:
+    # Build location is *vpp git root*/build-root/install-vpp-native/vpp/bin/vpp
+    # Install location is: /usr/bin/vpp OR /usr/local/bin/vpp
+    binary: /usr/bin/vpp
+    # startup_conf: VPP startup configuration file, install location is:
+    # /etc/vpp/startup.conf
+    startup_conf: /etc/vpp/startup.conf
+    log: /tmp/vppqa/vpp_log.txt
+    memory_log: /tmp/vppqa/vpp_mem_log.txt
+
+vcllib:
+    path: /home/sam/libvcl_ldpreload.so
+
+# IPERF3 TEST CONFIGURATION
+iperf3:
+    # run test True/False
+    enable: True
+
+    # host on which server is running
+
+    # each iperf session (client server instances) needs unique port
+    # port num will increment for each session, starting at default_port
+    # script will skip ports in use
+
+    default_port: 1024
+
+    # number of client-server instances
+
+    sessions: 8
+
+    # number of connections per client
+
+    connections_per_session: 1
+
+    # time after which client will terminate
+
+    test_duration: 30
+
+    # additional time, to allow clients to terminate. After this timeout expires,
+    # all running instances will be terminated/killed
+
+    additional_timeout: 20
+
+    server_log: /tmp/vppqa/iperf_server_log.txt
+    client_log: /tmp/vppqa/iperf_client_log.txt
+
+    server_mem_log: /tmp/vppqa/iperf_server_mem_log.txt
+    client_mem_log: /tmp/vppqa/iperf_client_mem_log.txt
+
+# TCPKALI TEST CONFIGURATION
+tcpkali:
+    # run test True/False
+    # enable: True
+    enable: False # TCPKALI is not compatible with VPP-VCL (yet?), keep disabled
+
+    # host on which server is running
+
+    host: localhost
+
+    # port for server to listen and client to connect to
+
+    port: 1234
+
+    # number of connections
+
+    connections: 1
+
+    # connection establishment rate (conn per sec)
+
+    connect_rate: 10
+    
+    test_duration_server: 10
+    test_duration_client: 10
+
+    # message that client will send
+
+    message: VPP_TCP-stack_test
+
+    # specify sequence of characters to look for in data stream
+
+    latency_marker:
+
+    # message rate (msg per sec)
+    # if latency marker is set, use @#ms to specify maximum msg latency
+    # tcpkali will attempt to figure out max msg rate
+
+    message_rate: 1k
+
+    # number of workers for server process (only 1 worker supported on server now)
+    # 0 for all available CPUs
+
+    server_workers: 1
+
+    # number of workers for client process
+    # 0 for all available CPUs
+
+    client_workers: 1
+
+    server_log: /tmp/tcpk_server_log.txt
+    client_log: /tmp/tcpk_client_log.txt
+
+    server_mem_log: /tmp/tcpk_server_mem_log.txt
+    client_mem_log: /tmp/tcpk_client_mem_log.txt
