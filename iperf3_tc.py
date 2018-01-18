@@ -48,7 +48,8 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         add_to = self.test_config['iperf3']['additional_timeout']
 
         for i in range(iperf_sessions):
-            iperf_output_file_list.append('/tmp/iperf_session_{}.txt'.format(i))
+            iperf_output_file_list.append('{0}/iperf_session_{1}.txt'.format(
+                self.test_config["iperf3"]["client_json_out"], i))
             try:
                 os.remove(iperf_output_file_list[i])
             except OSError:
@@ -236,7 +237,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         self.test_info.printt(
             "Connections per session: {}".format(iperf_connections))
         self.test_info.printt(
-            "Succesfull sessions: {}".format(ok_sessions))
+            "Succesful sessions: {}".format(ok_sessions))
         self.test_info.printt(
             "Failed to connect sessions: {}".format(iperf_sessions - (
                 ok_sessions + failed_sessions)))
@@ -246,6 +247,6 @@ class Iperf3TestCase(TCPStackBaseTestCase):
             self.test_info.printt(
                 "Throughput: %0.3f Gb/sec" % thp)
             self.test_info.printt(
-                "Avrage throughput per session: %0.3f Gb/sec" % (
+                "Average throughput per session: %0.3f Gb/sec" % (
                     thp / ok_sessions))
         self.test_info.printt("=======================================")

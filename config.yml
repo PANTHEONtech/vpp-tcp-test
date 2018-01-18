@@ -59,6 +59,8 @@ iperf3:
     server_mem_log: /tmp/vppqa/iperf_server_mem_log.txt
     client_mem_log: /tmp/vppqa/iperf_client_mem_log.txt
 
+    client_json_out: /tmp/vppqa
+
 # TCPKALI TEST CONFIGURATION
 tcpkali:
     # run test True/False
