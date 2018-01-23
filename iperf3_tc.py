@@ -11,7 +11,8 @@ from base_tc import TestInfo, check_wait_kill, VPPInstance,\
 
 class Iperf3TestCase(TCPStackBaseTestCase):
 
-    def __init__(self, test_config, use_vpp=None, corelist=None):
+    def __init__(self, test_config, use_vpp=None, corelist=None,
+                 corelist_client=None):
         super(Iperf3TestCase, self).__init__(test_config, use_vpp)
 
         self.server_log_file = self.test_config['iperf3']['server_log']
@@ -19,6 +20,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         self.server_mem_log_file = self.test_config['iperf3']['server_mem_log']
         self.client_mem_log_file = self.test_config['iperf3']['client_mem_log']
         self.corelist = corelist
+        self.corelist_client = corelist_client if corelist_client else corelist
 
     def setUp(self):
         super(Iperf3TestCase, self).setUp()
@@ -127,7 +129,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         # reset default port (in case some ports were skipped)
         default_port = self.test_config['iperf3']['default_port']
 
-        for i, cpu in zip(range(iperf_sessions), cycle(self.corelist)):
+        for i, cpu in zip(range(iperf_sessions), cycle(self.corelist_client)):
             self.test_info.printt("Starting: IPERF-CLIENT-{}".format(i))
             # check if next port is in use
             if port_in_use:
