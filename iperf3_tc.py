@@ -3,6 +3,7 @@ import subprocess
 import os
 import json
 import time
+from itertools import cycle
 
 from base_tc import TestInfo, check_wait_kill, VPPInstance,\
     TCPStackBaseTestCase
@@ -10,13 +11,14 @@ from base_tc import TestInfo, check_wait_kill, VPPInstance,\
 
 class Iperf3TestCase(TCPStackBaseTestCase):
 
-    def __init__(self, test_config, use_vpp=None):
+    def __init__(self, test_config, use_vpp=None, corelist=None):
         super(Iperf3TestCase, self).__init__(test_config, use_vpp)
 
         self.server_log_file = self.test_config['iperf3']['server_log']
         self.client_log_file = self.test_config['iperf3']['client_log']
         self.server_mem_log_file = self.test_config['iperf3']['server_mem_log']
         self.client_mem_log_file = self.test_config['iperf3']['client_mem_log']
+        self.corelist = corelist
 
     def setUp(self):
         super(Iperf3TestCase, self).setUp()
@@ -56,9 +58,9 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                 pass
         
         iperf_server_cmd = "/usr/local/bin/iperf3" \
-                           " -s -B {0} -V -4 -1".format(iperf_host)
+                           " -s -B {0} -4 -1 -V -i 0".format(iperf_host)
         iperf_client_cmd = "/usr/local/bin/iperf3" \
-                           " -V -4 -c {} -P {} -t {} --json".format(
+                           " -c {} -4 -P {} -t {} -O 10 -V -i 0 -l 128K --json".format(
                             iperf_host, iperf_connections, iperf_time)
 
         if self.use_vpp:
@@ -76,8 +78,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
             self.vpp_instance._configure_interface(
                 self.test_config['global']['host'])
             iperf_env = {"LD_PRELOAD": self.vcllib}
-            self.test_info.printt("Using vcllib_ldpreload")
-            print "==> memory info"
+            self.test_info.printt("Using vcllib_ldpreload: {}".format(iperf_env))
             self.vpp_instance._write_memory()
 
 # check ports
@@ -93,7 +94,8 @@ class Iperf3TestCase(TCPStackBaseTestCase):
 
 # start iperf servers
 
-        for i in range(iperf_sessions):
+        for i, cpu in zip(range(iperf_sessions), cycle(self.corelist)):
+            print cpu
             self.test_info.printt("Starting: IPERF-SERVER-{}".format(i))
             # check if next port is in use
             if port_in_use:
@@ -102,8 +104,10 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                         default_port += 1
                     else:
                         break
-            iperf_server_cmd_tmp = "{} -p {}".format(
-                iperf_server_cmd, default_port + i)
+            iperf_server_cmd_tmp = "{} -p {} -A {}".format(
+                iperf_server_cmd,
+                default_port + i,
+                cpu)
             self.test_info.printt(iperf_server_cmd_tmp)
             iperf_server_list.append(
                 [
@@ -123,7 +127,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         # reset default port (in case some ports were skipped)
         default_port = self.test_config['iperf3']['default_port']
 
-        for i in range(iperf_sessions):
+        for i, cpu in zip(range(iperf_sessions), cycle(self.corelist)):
             self.test_info.printt("Starting: IPERF-CLIENT-{}".format(i))
             # check if next port is in use
             if port_in_use:
@@ -132,8 +136,11 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                         default_port += 1
                     else:
                         break
-            iperf_client_cmd_tmp = "{} -p {} --logfile {}".format(
-                iperf_client_cmd, default_port + i, iperf_output_file_list[i])
+            iperf_client_cmd_tmp = "{} -p {} -A {} --logfile {}".format(
+                iperf_client_cmd,
+                default_port + i,
+                cpu,
+                iperf_output_file_list[i])
             self.test_info.printt(iperf_client_cmd_tmp)
             iperf_client_list.append(
                 [
