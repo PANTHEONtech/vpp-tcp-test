@@ -11,7 +11,7 @@ from base_tc import TestInfo, check_wait_kill, VPPInstance,\
 
 class Iperf3TestCase(TCPStackBaseTestCase):
 
-    def __init__(self, test_config, use_vpp=None, corelist=None,
+    def __init__(self, test_config, use_vpp=True, corelist=None,
                  corelist_client=None):
         super(Iperf3TestCase, self).__init__(test_config, use_vpp)
 
@@ -19,6 +19,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         self.client_log_file = self.test_config['iperf3']['client_log']
         self.server_mem_log_file = self.test_config['iperf3']['server_mem_log']
         self.client_mem_log_file = self.test_config['iperf3']['client_mem_log']
+        self.use_vpp = use_vpp
         self.corelist = corelist
         self.corelist_client = corelist_client if corelist_client else corelist
 
@@ -43,7 +44,8 @@ class Iperf3TestCase(TCPStackBaseTestCase):
 
 # set test configuration
 
-        iperf_host = self.test_config['global']['host']
+        iperf_host = self.test_config['global']['host'] if self.use_vpp\
+            else "localhost"
         default_port = self.test_config['iperf3']['default_port']
         iperf_sessions = self.test_config['iperf3']['sessions']
         iperf_connections =\
@@ -62,8 +64,8 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         iperf_server_cmd = "/usr/local/bin/iperf3" \
                            " -s -B {0} -4 -1 -V -i 0".format(iperf_host)
         iperf_client_cmd = "/usr/local/bin/iperf3" \
-                           " -c {} -4 -P {} -t {} -O 10 -V -i 0 -l 128K --json".format(
-                            iperf_host, iperf_connections, iperf_time)
+                           " -c {} -4 -P {} -t {} -O 10 -V -i 0 -l 128K --json"\
+            .format(iperf_host, iperf_connections, iperf_time)
 
         if self.use_vpp:
             # start vpp and set env var
@@ -79,8 +81,9 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                 return None
             self.vpp_instance._configure_interface(
                 self.test_config['global']['host'])
-            iperf_env = {"LD_PRELOAD": self.vcllib}
-            self.test_info.printt("Using vcllib_ldpreload: {}".format(iperf_env))
+            iperf_env = {"LD_PRELOAD": self.vcllib} if self.use_vpp else None
+            self.test_info.printt(
+                "Using vcllib_ldpreload: {}".format(iperf_env))
             self.vpp_instance._write_memory()
 
 # check ports
@@ -97,7 +100,6 @@ class Iperf3TestCase(TCPStackBaseTestCase):
 # start iperf servers
 
         for i, cpu in zip(range(iperf_sessions), cycle(self.corelist)):
-            print cpu
             self.test_info.printt("Starting: IPERF-SERVER-{}".format(i))
             # check if next port is in use
             if port_in_use:
