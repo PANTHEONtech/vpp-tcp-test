@@ -3,6 +3,7 @@
 global:
     # result of each test will be in separate file in this folder
     test_result_dir: /tmp/vppqa
+    log_dir: /tmp/vcl_results
     # IP address used in tests:
     # Configured on VPP loopback interface
     # Used as binding for iperf3 server listener
@@ -17,8 +18,6 @@ vpp:
     # startup_conf: VPP startup configuration file, install location is:
     # /etc/vpp/startup.conf
     startup_conf: /etc/vpp/startup.conf
-    log: /tmp/vppqa/vpp_log.txt
-    memory_log: /tmp/vppqa/vpp_mem_log.txt
 
 vcllib:
     path: /home/sam/libvcl_ldpreload.so
@@ -44,74 +43,16 @@ iperf3:
 
     connections_per_session: 1
 
-    # time after which client will terminate
+    # time (seconds) after which client will terminate
+    # the first 10 seconds will not be measured
 
     test_duration: 30
+
+    # Size of send/receive buffers and of messages sent
+
+    message_size: 128KB
 
     # additional time, to allow clients to terminate. After this timeout expires,
     # all running instances will be terminated/killed
 
     additional_timeout: 20
-
-    server_log: /tmp/vppqa/iperf_server_log.txt
-    client_log: /tmp/vppqa/iperf_client_log.txt
-
-    server_mem_log: /tmp/vppqa/iperf_server_mem_log.txt
-    client_mem_log: /tmp/vppqa/iperf_client_mem_log.txt
-
-    client_json_out: /tmp/vppqa
-
-# TCPKALI TEST CONFIGURATION
-tcpkali:
-    # run test True/False
-    # enable: True
-    enable: False # TCPKALI is not compatible with VPP-VCL (yet?), keep disabled
-
-    # host on which server is running
-
-    host: localhost
-
-    # port for server to listen and client to connect to
-
-    port: 1234
-
-    # number of connections
-
-    connections: 1
-
-    # connection establishment rate (conn per sec)
-
-    connect_rate: 10
-    
-    test_duration_server: 10
-    test_duration_client: 10
-
-    # message that client will send
-
-    message: VPP_TCP-stack_test
-
-    # specify sequence of characters to look for in data stream
-
-    latency_marker:
-
-    # message rate (msg per sec)
-    # if latency marker is set, use @#ms to specify maximum msg latency
-    # tcpkali will attempt to figure out max msg rate
-
-    message_rate: 1k
-
-    # number of workers for server process (only 1 worker supported on server now)
-    # 0 for all available CPUs
-
-    server_workers: 1
-
-    # number of workers for client process
-    # 0 for all available CPUs
-
-    client_workers: 1
-
-    server_log: /tmp/tcpk_server_log.txt
-    client_log: /tmp/tcpk_client_log.txt
-
-    server_mem_log: /tmp/tcpk_server_mem_log.txt
-    client_mem_log: /tmp/tcpk_client_mem_log.txt

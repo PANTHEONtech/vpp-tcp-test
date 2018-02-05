@@ -15,10 +15,14 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                  corelist_client=None):
         super(Iperf3TestCase, self).__init__(test_config, use_vpp)
 
-        self.server_log_file = self.test_config['iperf3']['server_log']
-        self.client_log_file = self.test_config['iperf3']['client_log']
-        self.server_mem_log_file = self.test_config['iperf3']['server_mem_log']
-        self.client_mem_log_file = self.test_config['iperf3']['client_mem_log']
+        self.server_log_file = "{0}/iperf3/iperf_server_log.txt".format(
+            self.test_config['global']['log_dir'])
+        self.client_log_file = "{0}/iperf3/iperf_client_log.txt".format(
+            self.test_config['global']['log_dir'])
+        self.server_mem_log_file = "{0}/iperf3/iperf_server_mem_log.txt".format(
+            self.test_config['global']['log_dir'])
+        self.client_mem_log_file = "{0}/iperf3/iperf_client_mem_log.txt".format(
+            self.test_config['global']['log_dir'])
         self.use_vpp = use_vpp
         self.corelist = corelist
         self.corelist_client = corelist_client if corelist_client else corelist
@@ -50,12 +54,14 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         iperf_sessions = self.test_config['iperf3']['sessions']
         iperf_connections =\
             self.test_config['iperf3']['connections_per_session']
+        iperf_message_size = self.test_config["iperf3"]["message_size"]
         iperf_time = self.test_config['iperf3']['test_duration']
         add_to = self.test_config['iperf3']['additional_timeout']
 
         for i in range(iperf_sessions):
-            iperf_output_file_list.append('{0}/iperf_session_{1}.txt'.format(
-                self.test_config["iperf3"]["client_json_out"], i))
+            iperf_output_file_list.append(
+                '{0}/iperf3/iperf_session_{1}.txt'.format(
+                    self.test_config["global"]["log_dir"], i))
             try:
                 os.remove(iperf_output_file_list[i])
             except OSError:
@@ -64,27 +70,37 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         iperf_server_cmd = "/usr/local/bin/iperf3" \
                            " -s -B {0} -4 -1 -V -i 0".format(iperf_host)
         iperf_client_cmd = "/usr/local/bin/iperf3" \
-                           " -c {} -4 -P {} -t {} -O 10 -V -i 0 -l 128K --json"\
-            .format(iperf_host, iperf_connections, iperf_time)
+                           " -c {host} -4 -P {connections} -t {time}" \
+                           " -O 10 -V -i 0 -l {length} --json".format(
+                            host=iperf_host,
+                            connections=iperf_connections,
+                            time=iperf_time,
+                            length=iperf_message_size)
 
         if self.use_vpp:
             # start vpp and set env var
-            self.vpp_instance = VPPInstance(
-                self.test_config['vpp']['binary'],
-                self.test_config['vpp']['startup_conf'],
-                self.test_config['vpp']['log'],
-                self.test_config['vpp']['memory_log'],
-                self.test_info)
-            self.vpp_instance._start_vpp()
-            if self.vpp_instance.vpp_process.returncode:
-                self.test_info.printt("Exiting...")
-                return None
-            self.vpp_instance._configure_interface(
-                self.test_config['global']['host'])
-            iperf_env = {"LD_PRELOAD": self.vcllib} if self.use_vpp else None
-            self.test_info.printt(
-                "Using vcllib_ldpreload: {}".format(iperf_env))
-            self.vpp_instance._write_memory()
+            for x in range(3):
+                self.vpp_instance = VPPInstance(
+                    self.test_config['vpp']['binary'],
+                    self.test_config['vpp']['startup_conf'],
+                    self.test_config['global']['log_dir'],
+                    self.test_info)
+                self.vpp_instance._start_vpp()
+                if self.vpp_instance.vpp_process.returncode:
+                    self.test_info.printt("Exiting...")
+                    return None
+                try:
+                    self.vpp_instance._configure_interface(
+                        self.test_config['global']['host'])
+                except RuntimeError:
+                    self.vpp_instance._stop_vpp()
+                    # Cleanup and restart VPP
+                    continue
+                iperf_env = {"LD_PRELOAD": self.vcllib} if self.use_vpp else None
+                self.test_info.printt(
+                    "Using vcllib_ldpreload: {}".format(iperf_env))
+                self.vpp_instance._write_memory()
+                break
 
 # check ports
 

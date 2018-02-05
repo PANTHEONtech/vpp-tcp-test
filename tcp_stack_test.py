@@ -5,7 +5,6 @@ import os
 import argparse
 import yaml
 from iperf3_tc import Iperf3TestCase
-from tcpkali_tc import tcpkali_TestCase
 from cpu_affinity import Affinity
 
 ATTR_NO_VPP = '--no-vpp'
@@ -45,8 +44,6 @@ def build_suite(config):
             use_vpp=USE_VPP,
             corelist=corelist,
             corelist_client=corelist_client))
-    if config['tcpkali']['enable']:
-        suite.addTest(tcpkali_TestCase(config))
     return suite
 
 
@@ -54,6 +51,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="VCL test script.",
         formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument(
+        "-s", type=int,
+        help="Number of client/server session pairs.")
+    parser.add_argument(
+        "-c", type=int,
+        help="Number of connections opened from each client.")
+    parser.add_argument(
+        "-ms", type=str,
+        help="Message size and send/receive buffer length.")
     parser.add_argument(
         "--no_vpp", action='store_true',
         help="Run test without VCL preload.")
@@ -72,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--skip_cores", type=str, metavar="x,y-z",
         help="Specify logical CPUs to exclude,\n"
-             "as comma separated list of distinct core IDs or ranges\n"
+             "as comma separated list of distinct core IDs or ranges.\n"
              "Will also exclude the specified cores' Hyperthreading twins.")
     parser.add_argument(
         "--reuse", action="store_true",
@@ -80,6 +86,7 @@ if __name__ == "__main__":
              "(except skipped) will run one server and one client\n"
              " from different pairs.")
 
+    # Parse arguments
     args = parser.parse_args()
     if args.no_vpp:
         USE_VPP = False
@@ -98,14 +105,15 @@ if __name__ == "__main__":
     with open(test_config_file, 'r') as ymlf:
         test_config = yaml.load(ymlf)
 
-    # override logfile location
-    test_config["global"]["test_result_dir"] = logdir
-    for log in logfiles["vpp"].keys():
-        test_config["vpp"][log] = "{0}/{1}".format(
-            logdir, logfiles["vpp"][log])
-    for log in logfiles["iperf3"].keys():
-        test_config["iperf3"][log] = "{0}/{1}".format(
-            logdir, logfiles["iperf3"][log])
+    # override config with command line arguments, if provided
+    if args.logdir:
+        test_config["global"]["log_dir"] = logdir
+    if args.s:
+        test_config["iperf3"]["sessions"] = args.s
+    if args.c:
+        test_config["iperf3"]["connections_per_session"] = args.c
+    if args.ms:
+        test_config["iperf3"]["message_size"] = args.ms
 
     # Generate corelists for client and server processes
     ht_pairs = Affinity.get_ht_pairs(skip_cores)

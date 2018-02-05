@@ -2,6 +2,7 @@
 processes."""
 
 import subprocess
+from time import sleep
 
 
 class Affinity(object):
@@ -21,7 +22,13 @@ class Affinity(object):
 
         proc = subprocess.Popen(
             command, shell=True, stdout=subprocess.PIPE)
-        proc.poll()
+        for x in range(3):
+            if proc.poll() is not None:
+                break
+            else:
+                sleep(1)
+        else:
+            raise RuntimeError("Timeout executing command.")
         return proc.stdout.read()
 
     @staticmethod

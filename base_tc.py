@@ -75,19 +75,15 @@ class VPPInstance:
     startup_conf = None
 
     # TODO: cpu startup conf...
-    def __init__(self, vpp_binary, startup_conf, log, memory_log, test_info):
+    def __init__(self, vpp_binary, startup_conf, log_dir, test_info):
         self.test_info = test_info
         self.vpp_binary = vpp_binary
         self.startup_conf = startup_conf
-        # try:
-        #     with open(startup_conf, 'r') as vscf:
-        #         self.startup_conf = vscf.read()
-        #         self. startup_conf = self.startup_conf.replace(
-        #             '\n', ' ').strip()
-        # except IOError as e:
-        #     self.test_info.printt(
-        #         "Failed to open startup.conf file. Error: {}".format(e))
-        #     self.startup_conf = ''
+        log = "{0}/vpp/vpp_log.txt".format(log_dir)
+        memory_log = "{0}/vpp/vpp_mem_log.txt".format(log_dir)
+
+        if not os.path.isdir(os.path.dirname(log)):
+            os.makedirs(os.path.dirname(log))
         try:
             self.log = open(log, 'w+')
         except OSError as e:
@@ -111,6 +107,18 @@ class VPPInstance:
 
     def _start_vpp(self):
 
+        self.test_info.printt("Cleaning out VPP from /dev/shm/")
+        proc_vpe = subprocess.Popen(["rm", "/dev/shm/vpe-api"],
+                                    stdin=subprocess.PIPE,
+                                    stdout=self.log,
+                                    stderr=self.log)
+        proc_vm = subprocess.Popen(["rm", "/dev/shm/global_vm"],
+                                   stdin=subprocess.PIPE,
+                                   stdout=self.log,
+                                   stderr=self.log)
+        if proc_vpe.poll() is None or proc_vm.poll() is None:
+            time.sleep(1)
+
         vpp_process = "VPP-PROCESS"
 
         self.test_info.printt("{}: Starting...".format(vpp_process))
@@ -126,7 +134,7 @@ class VPPInstance:
             [self.vpp_binary, "-c", self.startup_conf],
             stdin=subprocess.PIPE, stdout=self.log, stderr=self.log)
 
-        # TODO: how to check if the VPP is ready ? (instead of using sleep)
+        # TODO: check if VPP is ready (instead of using sleep)
         self.test_info.printt("{0}: Waiting for VPP startup".format(
             vpp_process))
         time.sleep(10)  # let the VPP startup
@@ -141,27 +149,24 @@ class VPPInstance:
         return self.vpp_process
 
     def _configure_interface(self, ip_address):
-        proc = subprocess.Popen(
-            [
-                "vppctl",
-                "create loopback interface",
-            ],
-            stdin=subprocess.PIPE, stdout=self.log, stderr=self.log)
-        proc.wait()
-        proc = subprocess.Popen(
-            [
-                "vppctl",
-                "set int state loop0 up",
-            ],
-            stdin=subprocess.PIPE, stdout=self.log, stderr=self.log)
-        proc.wait()
-        proc = subprocess.Popen(
-            [
-                "vppctl",
-                "set int ip address loop0 {0}/32".format(ip_address),
-            ],
-            stdin=subprocess.PIPE, stdout=self.log, stderr=self.log)
-        proc.wait()
+        def exec_vppctl(command):
+            proc = subprocess.Popen(
+                [
+                    "vppctl",
+                    command,
+                ],
+                stdin=subprocess.PIPE, stdout=self.log, stderr=self.log)
+            for x in range(3):
+                if proc.poll() is not None:
+                    break
+                else:
+                    time.sleep(1)
+            else:
+                raise RuntimeError("vppctl command timed out.")
+
+        exec_vppctl("create loopback interface")
+        exec_vppctl("set int state loop0 up")
+        exec_vppctl("set int ip address loop0 {0}/32".format(ip_address))
         self.test_info.printt(
             "Configured VPP loopback interface with address {0}/32"
             .format(ip_address))
@@ -218,7 +223,7 @@ class TCPStackBaseTestCase(unittest.TestCase):
         self.test_config = test_config
 
         # global
-        self.test_result_dir = self.test_config['global']['test_result_dir']
+        self.test_result_dir = self.test_config['global']['log_dir']
 
         # vpp
         if use_vpp:
@@ -237,9 +242,9 @@ class TCPStackBaseTestCase(unittest.TestCase):
                 self.server_log_file,
                 self.server_mem_log_file):
             if not os.path.isdir(os.path.dirname(logfile)):
-                os.mkdir(os.path.dirname(logfile))
+                os.makedirs(os.path.dirname(logfile))
             if not os.path.isdir(os.path.dirname(logfile)):
-                os.mkdir(os.path.dirname(logfile))
+                os.makedirs(os.path.dirname(logfile))
         try:
             os.remove(self.client_log_file)
         except OSError:
