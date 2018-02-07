@@ -2,7 +2,6 @@
 
 global:
     # result of each test will be in separate file in this folder
-    test_result_dir: /tmp/vppqa
     log_dir: /tmp/vcl_results
     # IP address used in tests:
     # Configured on VPP loopback interface
@@ -20,7 +19,7 @@ vpp:
     startup_conf: /etc/vpp/startup.conf
 
 vcllib:
-    path: /home/sam/libvcl_ldpreload.so
+    path: /home/sam/libvcl_ldpreload.so.0.0.0
 
 # IPERF3 TEST CONFIGURATION
 iperf3:

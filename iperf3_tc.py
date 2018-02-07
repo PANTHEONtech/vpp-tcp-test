@@ -4,15 +4,16 @@ import os
 import json
 import time
 from itertools import cycle
+import ipaddress
 
-from base_tc import TestInfo, check_wait_kill, VPPInstance,\
+from base_tc import TestInfo, check_wait_kill, docker_cleanup, VPPInstance,\
     TCPStackBaseTestCase
 
 
 class Iperf3TestCase(TCPStackBaseTestCase):
 
-    def __init__(self, test_config, use_vpp=True, corelist=None,
-                 corelist_client=None):
+    def __init__(self, test_config, use_vpp=True, use_docker=False,
+                 corelist=None, corelist_client=None):
         super(Iperf3TestCase, self).__init__(test_config, use_vpp)
 
         self.server_log_file = "{0}/iperf3/iperf_server_log.txt".format(
@@ -26,6 +27,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         self.use_vpp = use_vpp
         self.corelist = corelist
         self.corelist_client = corelist_client if corelist_client else corelist
+        self.use_docker = use_docker
 
     def setUp(self):
         super(Iperf3TestCase, self).setUp()
@@ -49,7 +51,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
 # set test configuration
 
         iperf_host = self.test_config['global']['host'] if self.use_vpp\
-            else "localhost"
+            or self.use_docker else "localhost"
         default_port = self.test_config['iperf3']['default_port']
         iperf_sessions = self.test_config['iperf3']['sessions']
         iperf_connections =\
@@ -66,12 +68,26 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                 os.remove(iperf_output_file_list[i])
             except OSError:
                 pass
-        
-        iperf_server_cmd = "/usr/local/bin/iperf3" \
-                           " -s -B {0} -4 -1 -V -i 0".format(iperf_host)
-        iperf_client_cmd = "/usr/local/bin/iperf3" \
+
+        if self.use_docker:
+            iperf_path = "docker run -i --net vcl_docker_net --rm " \
+                         "{0} {1} {2}".format(
+                            "-v /dev/shm:/dev/shm",
+                            "-v {0}:{0}".format(
+                                self.test_config["global"]["log_dir"]),
+                            "vcl_iperf3_preload" if self.use_vpp
+                            else "vcl_iperf3")
+
+        else:
+            iperf_path = "/usr/local/bin/iperf3"
+
+        iperf_server_cmd = "{0}" \
+                           " -s -B {1} -4 -1 -V -i 0".format(iperf_path,
+                                                             iperf_host)
+        iperf_client_cmd = "{iperf_path}" \
                            " -c {host} -4 -P {connections} -t {time}" \
                            " -O 10 -V -i 0 -l {length} --json".format(
+                            iperf_path=iperf_path,
                             host=iperf_host,
                             connections=iperf_connections,
                             time=iperf_time,
@@ -87,8 +103,7 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                     self.test_info)
                 self.vpp_instance._start_vpp()
                 if self.vpp_instance.vpp_process.returncode:
-                    self.test_info.printt("Exiting...")
-                    return None
+                    continue
                 try:
                     self.vpp_instance._configure_interface(
                         self.test_config['global']['host'])
@@ -96,26 +111,65 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                     self.vpp_instance._stop_vpp()
                     # Cleanup and restart VPP
                     continue
-                iperf_env = {"LD_PRELOAD": self.vcllib} if self.use_vpp else None
+                if self.use_vpp and not self.use_docker:
+                    iperf_env = {"LD_PRELOAD": self.vcllib}
+                else:
+                    iperf_env = None
                 self.test_info.printt(
                     "Using vcllib_ldpreload: {}".format(iperf_env))
                 self.vpp_instance._write_memory()
                 break
+            else:
+                self.test_info.printt("VPP startup/configuration failed after "
+                                      "retrying.")
 
-# check ports
+        if self.use_docker:
+            self.test_info.printt("Configuring docker network.")
+            proc = subprocess.Popen(("docker", "network", "create",
+                                     "--subnet=192.168.0.0/16",
+                                     "vcl_docker_net"),
+                                    stdout=subprocess.PIPE)
+            for x in range(3):
+                if proc.poll() is not None:
+                    break
+                else:
+                    time.sleep(1)
+            else:
+                raise RuntimeError("Timeout creating docker network.")
+            self.test_info.printt(proc.stdout.read())
 
         # get ports in use
-        for sconn in psutil.net_connections():
-            # if any port that was going to be used with iperf is already in use
-            # store it in a list, these ports will be skipped
-            if (sconn.laddr[1] >= default_port)\
-                    and (sconn.laddr[1] <= default_port + iperf_sessions):
-                port_in_use.append(sconn.laddr[1])
-                self.test_info.printt("Port in use: {}".format(sconn.laddr[1]))
+        if iperf_host == "localhost":
+            for sconn in psutil.net_connections():
+                # If any port that was going to be used with iperf is already
+                # in use, store it in a list. These ports will be skipped.
+                if (sconn.laddr[1] >= default_port)\
+                        and (sconn.laddr[1] <= default_port + iperf_sessions):
+                    port_in_use.append(sconn.laddr[1])
+                    self.test_info.printt(
+                        "Port in use: {}".format(sconn.laddr[1]))
+
+        def ip_address(address_str):
+            """Wrapper fr ipaddress.ip_address(). Handles localhost
+            and allows using non-unicode strings."""
+            if address_str == "localhost":
+                address_str = "127.0.0.1"
+            return ipaddress.ip_address(unicode(address_str))
+
+        def ip_generator(start_ip):
+            """Returns incrementing IPv4 addresses, starting with
+            the one provided."""
+            ip_addr = ip_address(unicode(start_ip))
+            last_ip = ip_address(u"255.255.255.255")
+            while ip_addr <= last_ip:
+                yield ip_addr
+                ip_addr += 1
 
 # start iperf servers
 
-        for i, cpu in zip(range(iperf_sessions), cycle(self.corelist)):
+        for i, cpu, ip in zip(range(iperf_sessions),
+                              cycle(self.corelist),
+                              ip_generator(iperf_host)):
             self.test_info.printt("Starting: IPERF-SERVER-{}".format(i))
             # check if next port is in use
             if port_in_use:
@@ -128,6 +182,11 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                 iperf_server_cmd,
                 default_port + i,
                 cpu)
+            if self.use_docker and not self.use_vpp:
+                iperf_server_cmd_tmp = iperf_server_cmd_tmp.replace(
+                    "docker run", "docker run --ip {0}".format(ip))
+                iperf_server_cmd_tmp = iperf_server_cmd_tmp.replace(
+                    "-B {0}".format(iperf_host), "-B {0}".format(ip))
             self.test_info.printt(iperf_server_cmd_tmp)
             iperf_server_list.append(
                 [
@@ -147,7 +206,13 @@ class Iperf3TestCase(TCPStackBaseTestCase):
         # reset default port (in case some ports were skipped)
         default_port = self.test_config['iperf3']['default_port']
 
-        for i, cpu in zip(range(iperf_sessions), cycle(self.corelist_client)):
+        for i, cpu, server_ip, client_ip in zip(
+                range(iperf_sessions),
+                cycle(self.corelist_client),
+                ip_generator(iperf_host),
+                ip_generator(
+                    str(ip_address(
+                        unicode(iperf_host)) + iperf_sessions))):
             self.test_info.printt("Starting: IPERF-CLIENT-{}".format(i))
             # check if next port is in use
             if port_in_use:
@@ -161,6 +226,11 @@ class Iperf3TestCase(TCPStackBaseTestCase):
                 default_port + i,
                 cpu,
                 iperf_output_file_list[i])
+            if self.use_docker and not self.use_vpp:
+                iperf_client_cmd_tmp = iperf_client_cmd_tmp.replace(
+                    "docker run", "docker run --ip {0}".format(client_ip))
+                iperf_client_cmd_tmp = iperf_client_cmd_tmp.replace(
+                    "-c {0}".format(iperf_host), "-c {0}".format(server_ip))
             self.test_info.printt(iperf_client_cmd_tmp)
             iperf_client_list.append(
                 [
@@ -214,6 +284,9 @@ class Iperf3TestCase(TCPStackBaseTestCase):
 
         if self.vpp_instance:
             self.vpp_instance._stop_vpp()
+
+        if self.use_docker:
+            docker_cleanup("vcl_docker_net", self.test_info)
 
 # load test results
 

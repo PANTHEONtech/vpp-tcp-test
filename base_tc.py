@@ -69,6 +69,32 @@ def check_wait_kill(name, process, timeout_seconds, test_info):
     test_info.printt("{}: Process stopped".format(name))
 
 
+def docker_cleanup(network, test_info, timeout_seconds=3):
+    test_info.printt("Stopping containers that didn't exit:")
+    timeout = 0
+    devnull = open(os.devnull, "wb")
+    process = subprocess.Popen("docker kill $(docker ps -q)",
+                               shell=True,
+                               stderr=devnull,
+                               close_fds=True)
+    while None is process.returncode:
+        if timeout >= timeout_seconds:
+            break
+        time.sleep(1)
+        timeout += 1
+        process.poll()
+
+    test_info.printt("Removing docker network.")
+    process = subprocess.Popen(("docker", "network", "remove", network),
+                               stdout=subprocess.PIPE)
+    while None is process.returncode:
+        if timeout >= timeout_seconds:
+            break
+        time.sleep(1)
+        timeout += 1
+        process.poll()
+
+
 class VPPInstance:
 
     vpp_process = None

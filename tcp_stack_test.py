@@ -9,7 +9,7 @@ from cpu_affinity import Affinity
 
 ATTR_NO_VPP = '--no-vpp'
 USE_VPP = True
-logdir = "/tmp"
+USE_DOCKER = False
 procdist = None
 corelist = corelist_client = None
 skip_cores = None
@@ -42,6 +42,7 @@ def build_suite(config):
         suite.addTest(Iperf3TestCase(
             config,
             use_vpp=USE_VPP,
+            use_docker=USE_DOCKER,
             corelist=corelist,
             corelist_client=corelist_client))
     return suite
@@ -52,23 +53,24 @@ if __name__ == "__main__":
         description="VCL test script.",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument(
-        "-s", type=int,
+        "-s", type=int, metavar="#",
         help="Number of client/server session pairs.")
     parser.add_argument(
-        "-c", type=int,
+        "-c", type=int, metavar="#",
         help="Number of connections opened from each client.")
     parser.add_argument(
-        "-ms", type=str,
+        "-ms", type=str, metavar="#[KMG]",
         help="Message size and send/receive buffer length.")
     parser.add_argument(
         "--no_vpp", action='store_true',
         help="Run test without VCL preload.")
     parser.add_argument(
-        "--logdir", type=str, metavar="path",
+        "--logdir", type=str, metavar="<path>",
         help="Where to place output log files.\n"
         "If not specified, will use configuration from config.yml")
     parser.add_argument(
-        "--procdist", type=str, help="Specify distribution of "
+        "--procdist", type=str, metavar="<dist>",
+        help="Specify distribution of "
         "client/server process pairs\n "
         "across CPUs and NUMA nodes. Available options:"
         "\nls   share one logical core"
@@ -77,21 +79,33 @@ if __name__ == "__main__":
         "\nnn   run on separate NUMA nodes")
     parser.add_argument(
         "--skip_cores", type=str, metavar="x,y-z",
-        help="Specify logical CPUs to exclude,\n"
-             "as comma separated list of distinct core IDs or ranges.\n"
-             "Will also exclude the specified cores' Hyperthreading twins.")
+        help="Specify logical CPUs to exclude, as comma separated list\n"
+             "of distinct core IDs or ranges. Will also exclude\n"
+             "the specified cores' Hyperthreading twins.")
     parser.add_argument(
         "--reuse", action="store_true",
         help="More aggressively reuse CPUs. Every logical CPU\n"
              "(except skipped) will run one server and one client\n"
-             " from different pairs.")
+             "from different pairs.")
+    parser.add_argument(
+        "--docker", action="store_true",
+        help="Use docker to run every client and server instance\n"
+             "in a separate container.")
+    parser.add_argument(
+        "--zerocopy", action="store_true",
+        help="(only with --no_vpp) Use experimental zero-copy\n"
+             "socket option."
+    )
+
+    # read config file
+    test_config_file = os.getcwd() + "/config.yml"
+    with open(test_config_file, 'r') as ymlf:
+        test_config = yaml.load(ymlf)
 
     # Parse arguments
     args = parser.parse_args()
     if args.no_vpp:
         USE_VPP = False
-    if args.logdir:
-        logdir = args.logdir
     if args.procdist:
         procdist = args.procdist
     if procdist not in cases.keys():
@@ -99,15 +113,14 @@ if __name__ == "__main__":
                          "Available options are: {0}".format(cases.keys()))
     if args.skip_cores:
         skip_cores = Affinity.parse_cores(args.skip_cores)
+    if args.docker:
+        USE_DOCKER = True
+    if args.zerocopy:
+        raise NotImplementedError("Zero-copy option not implemented.")
 
-    # read config file
-    test_config_file = os.getcwd() + "/config.yml"
-    with open(test_config_file, 'r') as ymlf:
-        test_config = yaml.load(ymlf)
-
-    # override config with command line arguments, if provided
+    # Override config with command line arguments, if provided
     if args.logdir:
-        test_config["global"]["log_dir"] = logdir
+        test_config["global"]["log_dir"] = args.logdir
     if args.s:
         test_config["iperf3"]["sessions"] = args.s
     if args.c:
