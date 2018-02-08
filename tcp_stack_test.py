@@ -69,24 +69,19 @@ if __name__ == "__main__":
         help="Where to place output log files.\n"
         "If not specified, will use configuration from config.yml")
     parser.add_argument(
-        "--procdist", type=str, metavar="<dist>",
+        "--procdist", type=str, metavar="<dist>", default="ls",
         help="Specify distribution of "
-        "client/server process pairs\n "
-        "across CPUs and NUMA nodes. Available options:"
-        "\nls   share one logical core"
-        "\nps   share one physical core (Hyperthreading pair)"
-        "\nns   share the same NUMA node, different phys cores"
-        "\nnn   run on separate NUMA nodes")
+        "client/server process pairs\n"
+        "across CPUs and NUMA nodes. Each client and server will:"
+        "\nls -  share one logical core"
+        "\nps -  share one physical core (Hyperthreading pair)"
+        "\nns -  share the same NUMA node, different phys cores"
+        "\nnn -  run on separate NUMA nodes")
     parser.add_argument(
         "--skip_cores", type=str, metavar="x,y-z",
         help="Specify logical CPUs to exclude, as comma separated list\n"
              "of distinct core IDs or ranges. Will also exclude\n"
              "the specified cores' Hyperthreading twins.")
-    parser.add_argument(
-        "--reuse", action="store_true",
-        help="More aggressively reuse CPUs. Every logical CPU\n"
-             "(except skipped) will run one server and one client\n"
-             "from different pairs.")
     parser.add_argument(
         "--docker", action="store_true",
         help="Use docker to run every client and server instance\n"
@@ -131,28 +126,28 @@ if __name__ == "__main__":
     # Generate corelists for client and server processes
     ht_pairs = Affinity.get_ht_pairs(skip_cores)
 
-    if procdist == "ps" or args.reuse:
+    if procdist == "ps":
         for cores in ht_pairs.values():
             if len(cores) < 2:
                 raise RuntimeError(
-                    "Hyperthreading not active on all cores.")
+                    "Hyperthreading CPU distribution specified but HT is not"
+                    " active on all cores.")
 
     if len(ht_pairs.keys()) < 2 and procdist in ("ns", "nn"):
         raise RuntimeError(
-            "Cross-physcore testcase specified but only one physical core "
-            "was detected.")
+            "Cross-physcore CPU distribution specified but only one physical "
+            "core was detected.")
 
     numa_topology = Affinity.get_numa_topo(ht_pairs)
 
     if procdist == "nn" and numa_topology is None:
         raise RuntimeError(
-            "Cross-NUMA testcase specified but only one NUMA node "
+            "Cross-NUMA CPU distribution specified but only one NUMA node "
             "was detected.")
 
     corelist, corelist_client = cases[procdist](
         ht_pairs,
-        numa_topology,
-        reuse=True if args.reuse else False
+        numa_topology
     )
 
     if len(corelist) != len(corelist_client):

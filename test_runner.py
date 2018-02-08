@@ -1,14 +1,6 @@
 import os
 import subprocess
-
-sessions = [1]
-connections = [1]
-message_sizes = [60]
-test_cases = ["ls"]
-vpp = [False, True]
-docker = [True]
-skip_cores = "0"
-# TODO: Turn these into command line arguments or config file
+from test_runner_config import *
 
 with open("tcp_stack_results.csv", "w") as result_file:
     result_file.write(
@@ -24,19 +16,19 @@ with open("tcp_stack_results.csv", "w") as result_file:
                             for x in range(2):
                                 testrun_name = "s[{0}]c[{1}]ms[{2}]" \
                                                "_{3}_vpp-{4}_docker-{5}".format(
-                                            session_count,
-                                            connection_count,
-                                            message_size,
-                                            test_case,
-                                            vpp_state,
-                                            docker_state
-                                        )
+                                                session_count,
+                                                connection_count,
+                                                message_size,
+                                                test_case,
+                                                vpp_state,
+                                                docker_state
+                                                )
                                 command = (
                                     "python ./tcp_stack_test.py"
                                     " -s {sessions} -c {connections}"
                                     " -ms {message_size}"
                                     " --procdist {test_case}{vpp_state}{docker}"
-                                    " --skip_cores {skip_cores}"
+                                    "{skip_cores}"
                                     " --logdir {logdir}".format(
                                         sessions=session_count,
                                         connections=connection_count,
@@ -46,7 +38,8 @@ with open("tcp_stack_results.csv", "w") as result_file:
                                         else " --no_vpp",
                                         docker=" --docker" if docker_state
                                         else "",
-                                        skip_cores=skip_cores,
+                                        skip_cores=" --skip_cores {0}".format(
+                                            skip_cores) if skip_cores else "",
                                         logdir="/tmp/" + testrun_name,
                                         ))
                                 print "Running test case '{0}' with command:\n"\
@@ -65,8 +58,9 @@ with open("tcp_stack_results.csv", "w") as result_file:
                                     failed_sessions = int(
                                         result[line].split(" ")[4])
                                     if failed_sessions > session_count/10:
-                                        print "More than 10% of sessions failed " \
-                                              "to connect. ({0} out of {1}".format(
+                                        print "More than 10% of sessions " \
+                                              "failed to connect. " \
+                                              "({0} out of {1})".format(
                                                 failed_sessions, session_count)
                                     throughput = result[line+2].split(" ")[1]
                                     average = result[line+3].split(" ")[4]
@@ -74,25 +68,39 @@ with open("tcp_stack_results.csv", "w") as result_file:
                                     print "Results not available. Test Failed."
                                     continue
                                 else:
-                                    result_file.write("{0};".format(session_count))
-                                    result_file.write("{0};".format(connection_count))
-                                    result_file.write("{0};".format(message_size))
-                                    result_file.write("{0};".format(test_case))
-                                    result_file.write("{0};".format(vpp_state))
-                                    result_file.write("{0};".format(docker_state))
-                                    result_file.write("{0};".format(throughput))
-                                    result_file.write("{0};".format(average))
+                                    result_file.write("{0};".format(
+                                        session_count))
+                                    result_file.write("{0};".format(
+                                        connection_count))
+                                    result_file.write("{0};".format(
+                                        message_size))
+                                    result_file.write("{0};".format(
+                                        test_case))
+                                    result_file.write("{0};".format(
+                                        vpp_state))
+                                    result_file.write("{0};".format(
+                                        docker_state))
+                                    result_file.write("{0};".format(
+                                        throughput))
+                                    result_file.write("{0};".format(
+                                        average))
                                     result_file.write("{0}\n".format(
                                         failed_sessions))
                                     break
                             else:
                                 print "Test failed after retrying."
-                                result_file.write("{0};".format(session_count))
-                                result_file.write("{0};".format(connection_count))
-                                result_file.write("{0};".format(message_size))
-                                result_file.write("{0};".format(test_case))
-                                result_file.write("{0};".format(vpp_state))
-                                result_file.write("{0};".format(docker_state))
+                                result_file.write("{0};".format(
+                                    session_count))
+                                result_file.write("{0};".format(
+                                    connection_count))
+                                result_file.write("{0};".format(
+                                    message_size))
+                                result_file.write("{0};".format(
+                                    test_case))
+                                result_file.write("{0};".format(
+                                    vpp_state))
+                                result_file.write("{0};".format(
+                                    docker_state))
                                 result_file.write("N/A;" * 2)
                                 result_file.write("N/A\n")
                             result_file.flush()
