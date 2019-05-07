@@ -2,7 +2,7 @@
 
 Performance testing of VPP TCP host stack. VPP claims to provide a major 
 improvement over stardard Linux bridge for inter-container communication,
-by passing messages through shared memory.
+by passing packets through [shared memory](https://docs.fd.io/vpp/17.10/libmemif_doc.html).
 
 Using LD_PRELOAD the VCL library is preloaded for use with 
 [iperf3](https://github.com/esnet/iperf), a bandwidth measurement tool. 
